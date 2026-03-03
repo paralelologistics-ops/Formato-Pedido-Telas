@@ -24,7 +24,7 @@ def obtener_estampados():
 @st.cache_data
 def cargar_telas():
     # Asegúrate de que el archivo se llame exactamente así en GitHub
-    df = pd.read_csv('Formato Pedido Telas - TELAS.csv')
+    df = pd.read_csv('telas.csv')
     # Limpiar nombres por si hay espacios
     df['REF DE TELAS'] = df['REF DE TELAS'].str.strip()
     return df
