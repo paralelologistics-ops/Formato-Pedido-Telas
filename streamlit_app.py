@@ -20,13 +20,12 @@ def obtener_estampados():
 @st.cache_data
 def cargar_telas():
     df = pd.read_csv('telas.csv')
-    # Limpiamos nombres de columnas por si acaso
     df.columns = df.columns.str.strip()
     return df
 
 # --- INICIO DE LA APP ---
 st.set_page_config(page_title="Pedido Paralelo Pro", layout="wide")
-st.title("📑 Generador de Pedidos con Estampados")
+st.title("🏭 Generador de Pedidos de Telas")
 
 df_telas = cargar_telas()
 dict_fotos = obtener_estampados()
@@ -40,7 +39,7 @@ with st.container():
     
     with col1:
         tela_sel = st.selectbox("Seleccione Tela", df_telas['REF DE TELAS'].unique())
-        # CAMBIO: Ahora usamos la columna 'sin sublimar'
+        # BUSCARV en columna 'sin sublimar'
         precio_unidad = df_telas.loc[df_telas['REF DE TELAS'] == tela_sel, 'sin sublimar'].values[0]
         st.metric("Precio (Sin Sublimar)", f"${precio_unidad:,.0f}")
 
@@ -51,8 +50,7 @@ with st.container():
         diseno_sel = st.selectbox("Estampado", ["Ninguno"] + list(dict_fotos.keys()))
         id_img = dict_fotos.get(diseno_sel, None)
         if id_img:
-            # Link optimizado para visualización
-            img_url = f"https://drive.google.com/uc?export=view&id={id_img}"
+            img_url = f"https://drive.google.com/uc?id={id_img}"
             st.image(img_url, width=120)
 
     if st.button("🚀 Agregar al Pedido"):
@@ -65,71 +63,92 @@ with st.container():
             "Total": precio_unidad * cant
         })
 
-# --- TABLA DE PEDIDO CON OPCIÓN DE BORRAR ---
+# --- TABLA Y LÓGICA DE ADICIONALES ---
 if st.session_state.carrito:
-    st.subheader("Lista de Compra")
-    
-    # Creamos columnas para simular una tabla con botón de borrar
-    for i, item in enumerate(st.session_state.carrito):
-        c1, c2, c3, c4, c5, c6 = st.columns([2, 1, 1, 2, 1, 0.5])
-        c1.write(item['Tela'])
-        c2.write(f"{item['Cant']} m")
-        c3.write(f"${item['Costo']:,.0f}")
-        c4.write(item['Diseño'])
-        c5.write(f"**${item['Total']:,.0f}**")
-        if c6.button("🗑️", key=f"del_{i}"):
-            st.session_state.carrito.pop(i)
-            st.rerun()
-
-    # --- CÁLCULOS ESPECIALES ---
     df_temp = pd.DataFrame(st.session_state.carrito)
-    hay_mallatex = 1 if "Mallatex" in df_temp['Tela'].values else ""
-    hay_drill = 1 if df_temp['Tela'].str.contains("Drill Denim o Jean").any() else ""
     
+    # 1. Adicional Mallatex
+    hay_mallatex = 1 if "Mallatex" in df_temp['Tela'].values else 0
+    # 2. Adicional Drill
+    hay_drill = 1 if df_temp['Tela'].str.contains("Drill Denim o Jean").any() else 0
+    # 3. Total Sublimación (Excluyendo los de tu lista)
     excluidos = ["Drill Denim o Jean Liso Blanco", "Drill Denim o Jean Liso Negro", "Drill Grueso Negro", "Drill Liso Blanco", "Drill Liso Lila", "Drill Liso Negro", "Drill Liso Rojo", "Mallatex lisa"]
-    total_subli = df_temp[~df_temp['Tela'].isin(excluidos)]['Cant'].sum()
+    total_subli_mts = df_temp[~df_temp['Tela'].isin(excluidos)]['Cant'].sum()
 
-    st.sidebar.markdown("### Resumen")
-    st.sidebar.write(f"Adicional Mallatex: **{hay_mallatex}**")
-    st.sidebar.write(f"Adicional Drill: **{hay_drill}**")
-    st.sidebar.write(f"Total Sublimación: **{total_subli} mts**")
-    st.sidebar.title(f"TOTAL: ${df_temp['Total'].sum():,.0f}")
+    st.subheader("Resumen actual")
+    st.table(df_temp[['Tela', 'Cant', 'Costo', 'Diseño', 'Total']])
+
+    if st.button("🗑️ Borrar último producto"):
+        st.session_state.carrito.pop()
+        st.rerun()
 
     # --- BOTÓN PARA GENERAR PDF ---
-    if st.button("💾 Guardar Pedido en PDF"):
+    if st.button("💾 Generar y Descargar PDF"):
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
+        pdf.set_font("Arial", "B", 14)
         pdf.cell(0, 10, "SOLICITUD DE PEDIDO - PARALELO", ln=True, align="C")
+        
         pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 10, f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
+        pdf.cell(0, 7, f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
         pdf.ln(5)
 
-        # Encabezados de tabla
-        pdf.set_fill_color(200, 200, 200)
-        pdf.cell(40, 10, "Tela", 1, 0, "C", True)
-        pdf.cell(20, 10, "Cant", 1, 0, "C", True)
-        pdf.cell(30, 10, "Costo M", 1, 0, "C", True)
-        pdf.cell(40, 10, "Diseño", 1, 0, "C", True)
-        pdf.cell(30, 10, "Imagen", 1, 1, "C", True)
+        # Encabezados
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(50, 8, "Tela", 1, 0, "C", True)
+        pdf.cell(20, 8, "Cant", 1, 0, "C", True)
+        pdf.cell(30, 8, "Precio Unit", 1, 0, "C", True)
+        pdf.cell(50, 8, "Diseño", 1, 0, "C", True)
+        pdf.cell(35, 8, "Total", 1, 1, "C", True)
 
+        pdf.set_font("Arial", "", 9)
+        subtotal_productos = 0
+        
+        # Productos agregados
         for item in st.session_state.carrito:
-            pdf.cell(40, 20, item['Tela'], 1)
-            pdf.cell(20, 20, str(item['Cant']), 1)
-            pdf.cell(30, 20, f"${item['Costo']:,.0f}", 1)
-            pdf.cell(40, 20, item['Diseño'], 1)
-            
-            # Lógica para meter la imagen en el PDF
-            if item['ID_Img']:
-                try:
-                    img_data = requests.get(f"https://drive.google.com/uc?id={item['ID_Img']}").content
-                    img_stream = BytesIO(img_data)
-                    x, y = pdf.get_x(), pdf.get_y()
-                    pdf.image(img_stream, x=x+5, y=y+2, w=20)
-                except:
-                    pdf.cell(30, 20, "No disponible", 1)
-            
-            pdf.cell(30, 20, "", 1, 1) # Espacio para la imagen
+            pdf.cell(50, 10, item['Tela'], 1)
+            pdf.cell(20, 10, f"{item['Cant']}", 1, 0, "C")
+            pdf.cell(30, 10, f"${item['Costo']:,.0f}", 1, 0, "R")
+            pdf.cell(50, 10, item['Diseño'][:25], 1)
+            pdf.cell(35, 10, f"${item['Total']:,.0f}", 1, 1, "R")
+            subtotal_productos += item['Total']
 
-        pdf_output = pdf.output(dest='S').encode('latin-1')
-        st.download_button("⬇️ Descargar Archivo PDF", data=pdf_output, file_name="pedido_telas.pdf", mime="application/pdf")
+        # 4-5 Líneas en blanco para espacio
+        for _ in range(5):
+            pdf.cell(50, 8, "", 1)
+            pdf.cell(20, 8, "", 1)
+            pdf.cell(30, 8, "", 1)
+            pdf.cell(50, 8, "", 1)
+            pdf.cell(35, 8, "", 1, 1)
+
+        # Filas de Adicionales
+        pdf.set_font("Arial", "B", 9)
+        
+        # Fila Mallatex
+        pdf.cell(150, 8, "Adicional Mallatex (Flag)", 1, 0, "R")
+        pdf.cell(35, 8, str(hay_mallatex), 1, 1, "R")
+        
+        # Fila Drill
+        pdf.cell(150, 8, "Adicional Drill (Flag)", 1, 0, "R")
+        pdf.cell(35, 8, str(hay_drill), 1, 1, "R")
+        
+        # Fila Total Sublimación
+        pdf.cell(150, 8, "Total Metros Sublimación", 1, 0, "R")
+        pdf.cell(35, 8, f"{total_subli_mts} mts", 1, 1, "R")
+
+        # GRAN TOTAL
+        pdf.ln(2)
+        pdf.set_font("Arial", "B", 11)
+        pdf.set_fill_color(200, 220, 255)
+        pdf.cell(150, 10, "GRAN TOTAL DEL PEDIDO", 1, 0, "R", True)
+        pdf.cell(35, 10, f"${subtotal_productos:,.0f}", 1, 1, "R", True)
+
+        # Salida del PDF corregida
+        pdf_bytes = pdf.output() 
+        st.download_button(
+            label="⬇️ Descargar PDF de Pedido",
+            data=pdf_bytes,
+            file_name=f"Pedido_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            mime="application/pdf"
+        )
