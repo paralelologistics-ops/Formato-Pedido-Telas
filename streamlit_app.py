@@ -8,7 +8,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 API_KEY = "AIzaSyBipSMJcc_hwiQ-ATlt-mf2YUcG2_Q8uEc"
 FOLDER_ID = "17RIBmFQcEqZDZRWouTGsaNTOHQ2b--PG"
-LOGO_URL = "https://static.wixstatic.com/media/d0ce54_aee7f80f620b4f278247333f7ef558f5~mv2.png"
+LOGO_URL = "https://static.wixstatic.com/media/d0ce54_32d30a8159fd44d4a26c62563d7bfc38~mv2.jpg""
 
 def obtener_estampados():
     try:
